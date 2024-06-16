@@ -77,99 +77,111 @@ Snake Game은 터미널에서 동작하는 간단한 뱀 게임입니다. 이 �
 #### 예시 코드 (간략화된 예시)
 
 ```cpp
-#include <iostream>
-#include <fstream>
+#include <ncurses.h>
+#include <unistd.h>
 #include <vector>
-#include <string>
 
 using namespace std;
+
+const int FIELD_WIDTH = 21;
+const int FIELD_HEIGHT = 21;
 
 struct Point {
     int x, y;
     Point(int x = 0, int y = 0) : x(x), y(y) {}
 };
 
-enum class ObjectType { Wall, Obstacle, Item, Gate };
-
-struct MapObject {
-    Point position;
-    ObjectType type;
-    // 추가적인 필드들 (예: 아이템 종류, 게이트 입구와 출구 등)
-};
-
-class GameMap {
-private:
-    int width;
-    int height;
-    vector<MapObject> objects;
-
+class SnakeGameMap {
 public:
-    GameMap(int w, int h) : width(w), height(h) {}
+    SnakeGameMap();
+    void draw();
 
-    void addObject(Point pos, ObjectType type) {
-        objects.push_back({pos, type});
-    }
+private:
+    WINDOW *gameWin;
+    vector<Point> snake;
+    Point growthItem;
+    Point poisonItem;
+    Point gateIn;
+    Point gateOut;
+    vector<Point> walls;
 
-    void exportMap(string filename) {
-        ofstream file(filename);
-        if (!file.is_open()) {
-            cerr << "Failed to open file for export." << endl;
-            return;
-        }
-
-        for (auto obj : objects) {
-            file << obj.position.x << " " << obj.position.y << " ";
-            switch (obj.type) {
-                case ObjectType::Wall:
-                    file << "Wall";
-                    break;
-                case ObjectType::Obstacle:
-                    file << "Obstacle";
-                    break;
-                case ObjectType::Item:
-                    file << "Item";
-                    break;
-                case ObjectType::Gate:
-                    file << "Gate";
-                    break;
-            }
-            file << endl;
-        }
-
-        file.close();
-    }
-
-    void importMap(string filename) {
-        ifstream file(filename);
-        if (!file.is_open()) {
-            cerr << "Failed to open file for import." << endl;
-            return;
-        }
-
-        objects.clear();
-        int x, y;
-        string typeStr;
-        while (file >> x >> y >> typeStr) {
-            ObjectType type;
-            if (typeStr == "Wall")
-                type = ObjectType::Wall;
-            else if (typeStr == "Obstacle")
-                type = ObjectType::Obstacle;
-            else if (typeStr == "Item")
-                type = ObjectType::Item;
-            else if (typeStr == "Gate")
-                type = ObjectType::Gate;
-            else {
-                cerr << "Unknown object type found in file." << endl;
-                continue;
-            }
-
-            objects.push_back({{x, y}, type});
-        }
-
-        file.close();
-    }
+    void init();
+    bool isSnake(Point p);
 };
+
+SnakeGameMap::SnakeGameMap() {
+    initscr();
+    cbreak();
+    noecho();
+    curs_set(0);
+    gameWin = newwin(FIELD_HEIGHT, FIELD_WIDTH, 0, 0);
+    init();
+}
+
+void SnakeGameMap::init() {
+    snake.push_back(Point(FIELD_WIDTH / 2, FIELD_HEIGHT / 2));
+    snake.push_back(Point(FIELD_WIDTH / 2, FIELD_HEIGHT / 2 + 1));
+    snake.push_back(Point(FIELD_WIDTH / 2, FIELD_HEIGHT / 2 + 2));
+    growthItem = Point(2, 2);
+    poisonItem = Point(4, 4);
+    gateIn = Point(6, 6);
+    gateOut = Point(8, 8);
+
+    // 가로 및 세로 벽
+    for (int i = 0; i < FIELD_WIDTH; ++i) {
+        walls.push_back(Point(i, 0));
+        walls.push_back(Point(i, FIELD_HEIGHT - 1));
+    }
+    for (int i = 1; i < FIELD_HEIGHT - 1; ++i) {
+        walls.push_back(Point(0, i));
+        walls.push_back(Point(FIELD_WIDTH - 1, i));
+    }
+
+    // 겉 테두리의 꼭짓점에 Immune Wall 추가
+    walls.push_back(Point(0, 0));                      // 좌상단
+    walls.push_back(Point(FIELD_WIDTH - 1, 0));         // 우상단
+    walls.push_back(Point(0, FIELD_HEIGHT - 1));       // 좌하단
+    walls.push_back(Point(FIELD_WIDTH - 1, FIELD_HEIGHT - 1));  // 우하단
+}
+
+void SnakeGameMap::draw() {
+    wclear(gameWin);
+    box(gameWin, '#', '#');
+
+    // 벽 그리기
+    for (Point p : walls) {
+        if ((p.x == 0 && p.y == 0) ||
+            (p.x == FIELD_WIDTH - 1 && p.y == 0) ||
+            (p.x == 0 && p.y == FIELD_HEIGHT - 1) ||
+            (p.x == FIELD_WIDTH - 1 && p.y == FIELD_HEIGHT - 1)) {
+            mvwprintw(gameWin, p.y, p.x, "@"); // 겉 테두리의 꼭짓점에 Immune Wall
+        } else if (p.x == 0 || p.x == FIELD_WIDTH - 1) {
+            mvwprintw(gameWin, p.y, p.x, "#"); // 세로 벽
+        } else {
+            mvwprintw(gameWin, p.y, p.x, "#"); // 가로 벽
+        }
+    }
+
+    wrefresh(gameWin);
+}
+
+bool SnakeGameMap::isSnake(Point p) {
+    for (Point s : snake) {
+        if (s.x == p.x && s.y == p.y) return true;
+    }
+    return false;
+}
+
+int main() {
+    SnakeGameMap gameMap;
+    while (true) {
+        gameMap.draw();
+        usleep(500000); // 0.5초 대기
+    }
+    endwin();
+    return 0;
+}
+
 ```
 
 ### Map과 다른 객체와의 상호작용
